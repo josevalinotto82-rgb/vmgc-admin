@@ -1,3 +1,4 @@
+import { enrollmentReport } from "./officialization_enrollment_report.js";
 import { playerSearchRank } from "./player_search.js";
 import { requireSession } from "./auth.js";
 import { mountShell, getActiveTournament, setActiveTournament, renderStageNavigation, redirectFreeCardStage, openMiscBilling } from "./shell.js";
@@ -48,7 +49,15 @@ function singlePreview(registration) {
   return result.error ? { error: result.error, category: category || null, playingHandicap: null } : { ...result, error: null };
 }
 
+let previewCache = new WeakMap();
+let previewBundle = null;
 function groupPreview(group) {
+  if (previewBundle !== bundle) { previewCache = new WeakMap(); previewBundle = bundle; }
+  if (!previewCache.has(group)) previewCache.set(group, calculateGroupPreview(group));
+  return previewCache.get(group);
+}
+
+function calculateGroupPreview(group) {
   if (group.type === "pair" && bundle.rules.isClassic()) { const result = bundle.rules.classicPair(...group.registrations); return result.error ? { error: result.error, category: null, handicap: "—", tees: [] } : { category: result.category, handicap: result.playingHandicap, error: null, calculated: result, tees: [result.firstPlayingTee, result.secondPlayingTee] } }
   const values = group.registrations.map(singlePreview), error = values.find(item => item.error)?.error || null;
   return { error, category: values[0]?.category || null, handicap: group.type === "pair" ? values.map(item => item.playingHandicap ?? "—").join(" / ") : values[0]?.playingHandicap ?? "—", values, tees: values.map(item => item.category) };
@@ -83,28 +92,6 @@ function groupCategory(group) {
 
 function sameNumber(first, second) { const a = toNumber(first), b = toNumber(second); return a == null && b == null || a != null && b != null && Math.abs(a - b) < .001 }
 
-async function synchronizeExistingAssignments() {
-  if (bundle.rules.isClassic() && ["officialized", "archived", "finished", "finalized"].includes(bundle.tournament.status)) return 0;
-  let updated = 0;
-  for (const group of groups) {
-    const score = scorecardForGroup(group); if (!score || groupNeedsReview(group)) continue;
-    const preview = groupPreview(group), category = preview.category;
-    if (!category || preview.error) continue;
-    let changed = String(score.category_id || "") !== String(category.id || "");
-    if (group.type === "pair" && bundle.rules.isClassic()) {
-      const calculated = preview.calculated;
-      changed = changed || !sameNumber(score.official_index, calculated?.officialIndex) || !sameNumber(score.playing_handicap, calculated?.playingHandicap);
-    } else {
-      const values = preview.values || [singlePreview(group.registrations[0])];
-      changed = changed || !sameNumber(score.official_index, values[0]?.officialIndex) || !sameNumber(score.playing_handicap, values[0]?.playingHandicap);
-      if (group.type === "pair") changed = changed || !sameNumber(score.player_1_playing_handicap, values[0]?.playingHandicap) || !sameNumber(score.player_2_playing_handicap, values[1]?.playingHandicap);
-    }
-    if (!changed) continue;
-    if (group.type === "pair") await savePair(bundle, group, group.registrations.map(() => ({}))); else await saveSingle(bundle, group.registrations[0], {});
-    updated++;
-  }
-  return updated;
-}
 
 function groupSortValue(group) {
   const line = getLine(group.registrations[0]);
@@ -281,7 +268,7 @@ async function reloadActive() {
   bundle = await loadOfficialization(bundle.tournament.id); groups = buildGroups(bundle); renderAll();
 }
 
-function scheduleRealtimeReload() { clearTimeout(realtimeTimer); realtimeTimer = setTimeout(() => { const editing = playerDrawer.classList.contains("open") || paymentsDrawer.classList.contains("open") || document.activeElement?.matches("input,select,textarea"); if (!editing) reloadActive().catch(console.warn) }, 500) }
+function scheduleRealtimeReload() { clearTimeout(realtimeTimer); realtimeTimer = setTimeout(() => { const editing = playerDrawer.classList.contains("open") || paymentsDrawer.classList.contains("open") || byId("enrollmentDrawer").classList.contains("open") || document.activeElement?.matches("input,select,textarea"); if (!editing) reloadActive().catch(console.warn) }, 500) }
 function subscribeTournament(tournamentId) { if (realtimeChannel) supabase.removeChannel(realtimeChannel); realtimeChannel = supabase.channel(`adm-torneo-${tournamentId}`).on("postgres_changes", { event: "*", schema: "public", table: "registrations", filter: `tournament_id=eq.${tournamentId}` }, scheduleRealtimeReload).on("postgres_changes", { event: "*", schema: "public", table: "scorecards", filter: `tournament_id=eq.${tournamentId}` }, scheduleRealtimeReload).on("postgres_changes", { event: "*", schema: "public", table: "tournament_payments", filter: `tournament_id=eq.${tournamentId}` }, scheduleRealtimeReload).on("postgres_changes", { event: "*", schema: "public", table: "players" }, scheduleRealtimeReload).subscribe() }
 
 async function saveActive() {
@@ -371,6 +358,16 @@ async function printAllCards() {
   } catch (error) { notify(error.message, "error") } finally { setBusy(button, false) }
 }
 
+function renderEnrollmentReport() {
+  const report = enrollmentReport(bundle, groups, groupPreview);
+  const unit = count => report.pairMode ? (count === 1 ? "pareja" : "parejas") : (count === 1 ? "jugador" : "jugadores");
+  byId("enrollmentContent").innerHTML = '<div class="notice">' + escapeHtml(bundle.tournament.name) + ' · <strong>' + report.total + ' ' + unit(report.total) + '</strong></div>' +
+    report.rows.map(row => '<section class="drawer-section" style="display:flex;align-items:center;justify-content:space-between;gap:16px"><strong>' + escapeHtml(row.category.name || "Categoría") + '</strong><span class="status open">' + row.count + ' ' + unit(row.count) + '</span></section>').join("") +
+    (report.unclassified ? '<div class="notice warn">Sin categoría o para revisar: <strong>' + report.unclassified + ' ' + unit(report.unclassified) + '</strong></div>' : '') +
+    (report.incompletePlayers ? '<div class="notice warn">Sin compañero: <strong>' + report.incompletePlayers + ' jugador(es)</strong>. No se cuentan como parejas completas.</div>' : '') +
+    '<p class="subtle">Incluye todas las inscripciones vigentes del torneo, independientemente del pago, la creación de tarjeta y el filtro de la lista.</p>';
+}
+
 function renderPayments() {
   const allRows = bundle.registrations.map(registration => {
     const payment = bundle.paymentMap.get(String(registration.id)) || {};
@@ -421,8 +418,7 @@ async function selectTournament(id) {
   const tournament = tournaments.find(item => String(item.id) === String(id)); if (!tournament) return;
   setActiveTournament(tournament); history.replaceState({}, "", `oficializacion.html?torneo=${encodeURIComponent(id)}`); showState(pageState, "Cargando torneo…"); tableWrap.classList.add("hidden");
   bundle = await loadOfficialization(id); groups = buildGroups(bundle);
-  const synchronized = bundle.tournament.status === "archived" ? 0 : await synchronizeExistingAssignments();
-  if (synchronized) { bundle = await loadOfficialization(id); groups = buildGroups(bundle) }
+
   renderAll(); subscribeTournament(id);
 }
 
@@ -431,6 +427,9 @@ function closeDrawer(drawer) { drawer.classList.remove("open"); drawer.setAttrib
 byId("playerSearch").addEventListener("input", renderRows);
 byId("statusFilters").querySelectorAll("[data-filter]").forEach(button => button.addEventListener("click", () => { byId("statusFilters").querySelectorAll("[data-filter]").forEach(item => item.classList.remove("active")); button.classList.add("active"); currentFilter = button.dataset.filter; renderRows(); }));
 byId("drawerClose").addEventListener("click", () => closeDrawer(playerDrawer));
+byId("enrollmentSummaryButton").addEventListener("click", () => { renderEnrollmentReport(); const drawer = byId("enrollmentDrawer"); drawer.classList.add("open"); drawer.setAttribute("aria-hidden", "false"); });
+byId("enrollmentClose").addEventListener("click", () => closeDrawer(byId("enrollmentDrawer")));
+byId("enrollmentDrawer").addEventListener("click", event => { if (event.target === event.currentTarget) closeDrawer(event.currentTarget); });
 byId("paymentsClose").addEventListener("click", () => closeDrawer(paymentsDrawer));
 byId("savePlayerButton").addEventListener("click", saveActive);
 byId("couponButton").addEventListener("click", printCoupon);

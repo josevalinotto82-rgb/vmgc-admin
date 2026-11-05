@@ -70,9 +70,11 @@ export function buildGroups(bundle) {
   const { registrations, rules } = bundle;
   if (!rules.isPair()) return registrations.map(registration => ({ type: "single", registrations: [registration], key: registration.id }));
   const used = new Set(), groups = [];
+  const byRegistration = new Map(registrations.map(registration => [String(registration.id), registration]));
   for (const registration of registrations) {
     if (used.has(String(registration.id))) continue;
-    const partner = registrations.find(candidate => String(candidate.id) === String(registration.partner_registration_id));
+    const candidate = byRegistration.get(String(registration.partner_registration_id));
+    const partner = candidate && candidate !== registration && !used.has(String(candidate.id)) ? candidate : null;
     used.add(String(registration.id));
     if (partner) used.add(String(partner.id));
     groups.push({ type: partner ? "pair" : "single", registrations: partner ? [registration, partner] : [registration], key: partner ? [registration.id, partner.id].sort().join(":") : registration.id });
