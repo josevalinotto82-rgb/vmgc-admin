@@ -20,7 +20,7 @@
   <main class="shell">
     <section class="hero stage-hero">
       <div><h1>Adm. torneo</h1></div>
-      <div class="hero-actions"><button class="btn secondary" id="paymentsSummaryButton">Informe de pagos</button><button class="btn primary" id="saveReadyButton">Crear tarjetas</button></div>
+      <div class="hero-actions"><button class="btn gold" id="enrollmentSummaryButton">Informe de inscriptos</button><button class="btn secondary" id="paymentsSummaryButton">Informe de pagos</button><button class="btn primary" id="saveReadyButton">Crear tarjetas</button></div>
     </section>
     <div id="tournamentStrip"></div>
     <section class="card pricing-card"><div class="card-body"><div class="pricing-copy"><span class="eyebrow">Valores predeterminados</span><strong>Derecho de torneo</strong><small>Se aplican automáticamente al abrir cada jugador y quedan guardados en esta computadora.</small></div><div class="field"><label>Precio socio</label><input class="control money-control" id="memberPrice" inputmode="decimal" placeholder="$ 0,00"></div><div class="field"><label>Precio invitado</label><input class="control money-control" id="guestPrice" inputmode="decimal" placeholder="$ 0,00"></div></div></section>
@@ -37,8 +37,8 @@
   </main>
   <div class="drawer" id="playerDrawer" aria-hidden="true"><section class="drawer-panel officialization-drawer"><div class="drawer-head"><div><div class="eyebrow">Revisión individual</div><h2 id="drawerTitle">Administrar jugador</h2></div><button class="btn secondary small" id="drawerClose" aria-label="Cerrar">✕</button></div><div id="drawerContent"></div><div class="drawer-actions officialization-actions"><button class="btn secondary" id="couponButton">Cupón</button><button class="btn outline" id="cardButton">Tarjeta</button><button class="btn primary" id="savePlayerButton">Guardar jugador</button></div></section></div>
   <div class="drawer" id="paymentsDrawer" aria-hidden="true"><section class="drawer-panel"><div class="drawer-head"><div><div class="eyebrow">Control de caja</div><h2>Resumen de pagos</h2></div><button class="btn secondary small" id="paymentsClose">✕</button></div><div id="paymentsContent"></div><div class="drawer-actions"><button class="btn primary" id="printPaymentsButton">Imprimir informe A4</button></div></section></div>
+  <div class="drawer" id="enrollmentDrawer" aria-hidden="true"><section class="drawer-panel"><div class="drawer-head"><div><div class="eyebrow">Inscripciones del torneo</div><h2>Inscriptos por categoría</h2></div><button class="btn secondary small" id="enrollmentClose" aria-label="Cerrar">✕ Cerrar</button></div><div id="enrollmentContent"></div></section></div>
   <div id="printRoot"></div>
-  <script type="module" src="js/officialization_page.js?v=pagos-compactos-20261008"></script>
+  <script type="module" src="js/officialization_page.js?v=inscriptos-20261105"></script>
 </body>
 </html>
-//prueba
